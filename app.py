@@ -1,83 +1,69 @@
 import streamlit as st
-from openai import OpenAI
+from google import genai
 
-st.set_page_config(
-    page_title="AI Chat Assistant",
-    page_icon="🤖"
-)
+st.set_page_config(page_title="AI Chat Assistant", page_icon="🤖")
 
 st.title("🤖 AI Chat Assistant")
 st.caption("Codomax Internship – Module 3")
 
-# Connect to OpenAI using a secure secret
-try:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-except Exception:
-    st.error("OpenAI API key is not configured.")
-    st.stop()
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
-# Custom instructions
 st.sidebar.header("⚙️ Custom Instructions")
 
-system_instruction = st.sidebar.text_area(
+instruction = st.sidebar.text_area(
     "How should the AI respond?",
-    value="You are a helpful AI assistant. Give clear, accurate and easy-to-understand answers.",
-    height=120
+    "You are a helpful AI assistant. Give clear and easy-to-understand answers."
 )
 
-# Store conversation history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display previous messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User input
 user_input = st.chat_input("Type your message here...")
 
 if user_input:
+    st.session_state.messages.append(
+        {"role": "user", "content": user_input}
+    )
 
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
+    history = "\n".join(
+        f"{m['role']}: {m['content']}"
+        for m in st.session_state.messages
+    )
 
-    conversation = [
-        {
-            "role": "developer",
-            "content": system_instruction
-        }
-    ]
+    prompt = f"""
+{instruction}
 
-    conversation.extend(st.session_state.messages)
+Conversation:
+{history}
+
+Respond to the latest user message.
+"""
 
     try:
+        response = client.models.generate_content(
+            model="gemini-3.8-flash",
+            contents=prompt
+        )
+
+        answer = response.text
+
         with st.chat_message("assistant"):
-
-            response = client.responses.create(
-                model="gpt-5",
-                input=conversation,
-                max_output_tokens=500
-            )
-
-            answer = response.output_text
-
             st.markdown(answer)
 
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer
-        })
+        st.session_state.messages.append(
+            {"role": "assistant", "content": answer}
+        )
 
     except Exception as e:
-        st.error(f"An error occurred: {e}")
+        st.error(f"Error: {e}")
 
-# Clear conversation
 if st.sidebar.button("🗑️ Clear Chat"):
     st.session_state.messages = []
     st.rerun()
